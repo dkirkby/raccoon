@@ -55,11 +55,15 @@ class CANdecoder(object):
                     break
             except StopIteration:
                 break
-        self.samples = np.array(self.samples)
+        # Convert results to numpy arrays.
+        self.samples = np.array(self.samples, np.uint8)
         for k, v in self.errors.items():
-            self.errors[k] = np.array(v)
+            self.errors[k] = np.array(v, np.float32)
         self.annotations = np.array(self.annotations, dtype=[
             ('t1', np.float32), ('t2', np.float32), ('label', np.unicode_, self.MAX_ANNOTATION_LENGTH)])
+        self.frames = np.array(self.frames, dtype=[
+            ('t1', np.float32), ('t2', np.float32), ('IDE', np.uint8), ('RTR', np.uint8),
+            ('ID', np.uint32), ('DLC', np.uint8), ('DATA', np.uint8, 8)])
 
     @property
     def cursor(self):
@@ -167,22 +171,22 @@ class CANdecoder(object):
         self.crc = np.uint16(0)
         if self.nextbit() != 0:
             raise CANerror('Invalid start of frame (SOF) bit')
-        self.ident = self.nextfield(11, label='IDA={value:03X}')
+        ident = self.nextfield(11, label='IDA={value:03X}')
         RTR = self.nextbit()
         IDE = self.nextbit()
         if IDE == 1:
             if RTR == 0:
                 raise CANerror('Invalid substitute remote request (SSR) bit')
             # Decode extended frame format.
-            self.ident = (self.ident << 11) | self.nextfield(18, label='IDB={value:05X}')
+            ident = (ident << 18) | self.nextfield(18, label='IDB={value:05X}')
             RTR = self.nextbit()
             r1 = self.nextbit() # Either value allowed
         r0 = self.nextbit() # Either value allowed
         DLC = self.nextfield(4, label='DLC={value:d}')
-        self.data = []
+        data = np.zeros(8, np.uint8)
         if RTR == 0:
             for i in range(DLC):
-                self.data.append(self.nextfield(8, label=f'DATA{i}={{value:02X}}'))
+                data[i] = self.nextfield(8, label=f'DATA{i}={{value:02X}}')
         CRC = self.nextfield(15, update_crc=False, label='CRC={value:04X}')
         if CRC != self.crc:
             raise CANerror('CRC failed', f'got {CRC}={CRC:b} but expected {self.crc}={self.crc:b}')
@@ -202,29 +206,10 @@ class CANdecoder(object):
         if IFS != 0x7:
             raise CANerror('Invalid interframe space (IFS)')
         # If we get here, we have successfully decoded a data or remote frame.
-        tstart = self.dt[self.cursor]
-        if RTR == 1:
-            advance = self.remote_frame(tstart, self.ident, IDE, DLC)
-        else:
-            advance = self.data_frame(tstart, self.ident, IDE, self.data)
-        if advance:
-            self.advance()
-
-    def advance(self):
-        # Move to the current cursor position.
+        tstart = self.sample_t[0] - 0.5
+        tstop = self.sample_t[self.sample_k - 1] + 0.5
+        self.frames.append((tstart, tstop, IDE, RTR, ident, DLC, data))
+        # Move the cursor to the next transition edge.
         self.cursor += self.sample_idx[self.sample_k - 1]
         # Sample the next potential packet.
         self.sample()
-
-    def remote_frame(self, tstart, ident, IDE, DLC):
-        self.frames.append((tstart, ident, IDE, DLC))
-        ident_str = ('{05X}' if IDE else '{03X}').format(ident)
-        print(f'{tstart:10.2f} REMOTE ID={ident_str} DLC={DLC}')
-        return True
-
-    def data_frame(self, tstart, ident, IDE, data):
-        self.frames.append((tstart, ident, IDE, data))
-        ident_str = ('{0:05X}' if IDE else '{0:03X}').format(ident)
-        data_str = ','.join([f'{b:02X}' for b in data])
-        #print(f'{tstart:10.2f} DATA ID={ident_str} DATA=[{data_str}]')
-        return True
