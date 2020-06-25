@@ -46,7 +46,9 @@ class CANdecoder(object):
             try:
                 self.decode()
             except CANerror as e:
-                self.errors[e.args[0]].append(self.sample_t[self.sample_k])
+                t_error = self.sample_t[self.sample_k - 1]
+                self.errors[e.args[0]].append(t_error)
+                self.annotations.append((t_error - 0.5, t_error + 0.5, '!'))
                 try:
                     self.advance()
                 except StopIteration:
@@ -176,7 +178,7 @@ class CANdecoder(object):
             RTR = self.nextbit()
             r1 = self.nextbit() # Either value allowed
         r0 = self.nextbit() # Either value allowed
-        DLC = self.nextfield(4, label='#={value:d}')
+        DLC = self.nextfield(4, label='DLC={value:d}')
         self.data = []
         if RTR == 0:
             for i in range(DLC):
