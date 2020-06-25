@@ -71,11 +71,11 @@ class CANdecoder(object):
             raise StopIteration()
         self._cursor = value
 
-    def sample(self, nbits=157, max_glitch=0.1):
+    def sample(self, nbits=160, max_glitch=0.1):
         """Sample the next nbits starting from the next transition.
 
-        The default nbits is the maximum possible length of a data packet, including
-        bit stuffing.
+        The default nbits is the maximum possible length of an extended data packet, including
+        bit stuffing and interframe space.
 
         After calling this method, a frame of nbits samples starting with the currrent
         transition ``self.cursor`` are captured and indexed with ``self.k``
@@ -198,6 +198,9 @@ class CANdecoder(object):
         EOF = self.nextfield(7, label='EOF', unstuff=False, update_crc=False)
         if EOF != 0x7f:
             raise CANerror('Invalid end of frame (EOF)')
+        IFS = self.nextfield(3, label='IFS', unstuff=False, update_crc=False)
+        if IFS != 0x7:
+            raise CANerror('Invalid interframe space (IFS)')
         # If we get here, we have successfully decoded a data or remote frame.
         tstart = self.dt[self.cursor]
         if RTR == 1:
@@ -209,7 +212,7 @@ class CANdecoder(object):
 
     def advance(self):
         # Move to the current cursor position.
-        self.cursor += self.sample_idx[self.sample_k]
+        self.cursor += self.sample_idx[self.sample_k - 1]
         # Sample the next potential packet.
         self.sample()
 
