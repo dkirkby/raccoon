@@ -1,9 +1,13 @@
 """CAN bus protocol decoding.
 """
+import collections
 import numpy as np
 
 
 class CANerror(RuntimeError):
+    """First ctor arg is a string specifying the generic error type.
+    Any subsequent args provide details for a specific error.
+    """
     pass
 
 
@@ -27,11 +31,29 @@ class CANdecoder(object):
         self.x0 = x0
         self.rate = rate
         self.dt = rate * (np.asarray(times) - t0)
-        self.cursor = 0
         self.crc_poly = np.uint16(0x4599)
         self.crc_mask = np.uint16(0x7fff)
+
+    def run(self):
+        self.cursor = 0
+        self.samples = []
         self.frames = []
+        self.errors = collections.defaultdict(list)
         self.sample()
+        while True:
+            try:
+                self.decode()
+            except CANerror as e:
+                self.errors[e.args[0]].append(self.sample_t[self.sample_k])
+                try:
+                    self.advance()
+                except StopIteration:
+                    break
+            except StopIteration:
+                break
+        self.samples = np.array(self.samples)
+        for k, v in self.errors.items():
+            self.errors[k] = np.array(v)
 
     @property
     def cursor(self):
@@ -72,7 +94,6 @@ class CANdecoder(object):
         self.last_level = None
         self.num_repeats = 0
         self.sample_nbits = nbits
-        self.sample_unstuffed = np.zeros(nbits, bool)
         self.annotations = []
 
     def nextbit(self, unstuff=True, update_crc=True):
@@ -91,15 +112,19 @@ class CANdecoder(object):
         if self.sample_k >= self.sample_nbits:
             raise RuntimeError('All sample bits already consumed.')
         x = self.sample_level[self.sample_k]
+        self.samples.append((self.sample_t[self.sample_k], x))
         self.sample_k += 1
         if unstuff and (x == self.last_level):
             self.num_repeats += 1
             if self.num_repeats == 5:
                 xstuffed = self.sample_level[self.sample_k]
                 if xstuffed == self.last_level:
-                    raise CANerror(f'Error frames not supported yet (at bit {self.sample_k})')
+                    # Set bit-2 to flag invalid stuffed bit.
+                    self.samples.append((self.sample_t[self.sample_k], xstuffed | 4))
+                    raise CANerror('Error frame detected', f'starts at bit {self.sample_k}')
                 else:
-                    self.sample_unstuffed[self.sample_k] = True
+                    # Set bit-1 to flag valid stuffed bit.
+                    self.samples.append((self.sample_t[self.sample_k], xstuffed | 2))
                     self.sample_k += 1
                     self.last_level = xstuffed
                     self.num_repeats = 1
@@ -151,7 +176,7 @@ class CANdecoder(object):
                 self.data.append(self.nextfield(8, label=f'DATA{i}={{value:02X}}', color='gray' if i % 2 else 'lightgray'))
         CRC = self.nextfield(15, update_crc=False, label='CRC={value:04X}', color='cyan')
         if CRC != self.crc:
-            raise CANerror(f'CRC failed: got {CRC}={CRC:b} but expected {self.crc}={self.crc:b}')
+            raise CANerror('CRC failed', f'got {CRC}={CRC:b} but expected {self.crc}={self.crc:b}')
         CRCdelim = self.nextbit(unstuff=False, update_crc=False)
         if CRCdelim != 1:
             raise CANerror('Invalid CRC delimiter bit')
