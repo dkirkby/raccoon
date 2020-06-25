@@ -33,11 +33,13 @@ class CANdecoder(object):
         self.dt = rate * (np.asarray(times) - t0)
         self.crc_poly = np.uint16(0x4599)
         self.crc_mask = np.uint16(0x7fff)
+        self.MAX_ANNOTATION_LENGTH = 12
 
     def run(self):
         self.cursor = 0
         self.samples = []
         self.frames = []
+        self.annotations = []
         self.errors = collections.defaultdict(list)
         self.sample()
         while True:
@@ -54,6 +56,8 @@ class CANdecoder(object):
         self.samples = np.array(self.samples)
         for k, v in self.errors.items():
             self.errors[k] = np.array(v)
+        self.annotations = np.array(self.annotations, dtype=[
+            ('t1', np.float32), ('t2', np.float32), ('label', np.unicode_, self.MAX_ANNOTATION_LENGTH)])
 
     @property
     def cursor(self):
@@ -94,7 +98,6 @@ class CANdecoder(object):
         self.last_level = None
         self.num_repeats = 0
         self.sample_nbits = nbits
-        self.annotations = []
 
     def nextbit(self, unstuff=True, update_crc=True):
         """Return the next sampled bit with stuff bits optionally removed.
@@ -138,7 +141,7 @@ class CANdecoder(object):
             self.crc &= self.crc_mask
         return x
 
-    def nextfield(self, nbits, label=None, color='gray', unstuff=True, update_crc=True):
+    def nextfield(self, nbits, label=None, unstuff=True, update_crc=True):
         """Return the next nbits as an unsigned integer field read MSB first.
 
         Set label to store an annoation for this field to display using :meth:`plot`.
@@ -146,35 +149,39 @@ class CANdecoder(object):
         See :meth:`nextbit` for a description of the last two parameters.
         """
         value = 0
+        start_k = self.sample_k
         for i in range(nbits):
             value = (value << 1) | self.nextbit(unstuff, update_crc)
         if label is not None:
-            t_hi = self.sample_t[self.sample_k] + 0.5
-            t_lo = t_hi - nbits
-            self.annotations.append((t_lo, t_hi, label.format(value=value), color))
+            t_lo = self.sample_t[start_k] - 0.5
+            t_hi = self.sample_t[self.sample_k] - 0.5
+            formatted = label.format(value=value)
+            if len(formatted) > self.MAX_ANNOTATION_LENGTH:
+                print('WARNING: truncating annotation label "{formatted}".')
+            self.annotations.append((t_lo, t_hi, formatted[:self.MAX_ANNOTATION_LENGTH]))
         return value
 
     def decode(self):
         self.crc = np.uint16(0)
         if self.nextbit() != 0:
             raise CANerror('Invalid start of frame (SOF) bit')
-        self.ident = self.nextfield(11, label='IDA={value:03X}', color='g')
+        self.ident = self.nextfield(11, label='IDA={value:03X}')
         RTR = self.nextbit()
         IDE = self.nextbit()
         if IDE == 1:
             if RTR == 0:
                 raise CANerror('Invalid substitute remote request (SSR) bit')
             # Decode extended frame format.
-            self.ident = (self.ident << 11) | self.nextfield(18, label='IDB={value:05X}', color='g')
+            self.ident = (self.ident << 11) | self.nextfield(18, label='IDB={value:05X}')
             RTR = self.nextbit()
             r1 = self.nextbit() # Either value allowed
         r0 = self.nextbit() # Either value allowed
-        DLC = self.nextfield(4, label='DLC', color='y')
+        DLC = self.nextfield(4, label='#={value:d}')
         self.data = []
         if RTR == 0:
             for i in range(DLC):
-                self.data.append(self.nextfield(8, label=f'DATA{i}={{value:02X}}', color='gray' if i % 2 else 'lightgray'))
-        CRC = self.nextfield(15, update_crc=False, label='CRC={value:04X}', color='cyan')
+                self.data.append(self.nextfield(8, label=f'DATA{i}={{value:02X}}'))
+        CRC = self.nextfield(15, update_crc=False, label='CRC={value:04X}')
         if CRC != self.crc:
             raise CANerror('CRC failed', f'got {CRC}={CRC:b} but expected {self.crc}={self.crc:b}')
         CRCdelim = self.nextbit(unstuff=False, update_crc=False)
@@ -186,7 +193,7 @@ class CANdecoder(object):
         ACKdelim = self.nextbit(unstuff=False, update_crc=False)
         if ACKdelim != 1:
             raise CANerror('Invalid ACK delimiter bit')
-        EOF = self.nextfield(7, label='EOF', color='g', unstuff=False, update_crc=False)
+        EOF = self.nextfield(7, label='EOF', unstuff=False, update_crc=False)
         if EOF != 0x7f:
             raise CANerror('Invalid end of frame (EOF)')
         # If we get here, we have successfully decoded a data or remote frame.
