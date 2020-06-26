@@ -17,14 +17,26 @@ python -m pip install https://github.com/dkirkby/raccoon.git
 
 ## Usage
 
-Use a `Session` object to ingest, analyze and display raw CAN bus samples. Provide an optional high-level analyzer (HLA) to interpret complete data frames. A suitable HLA for DESI is included:
+Use a `Session` object to ingest, analyze and display raw CAN bus samples. Provide an optional high-level analyzer (HLA) to interpret complete data frames. A suitable HLA for [DESI](https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1710) is included.
+
+For example:
 ```
 from raccoon.session import Session
 from raccoon.desi import desibus
 
-TemperatureRead = Session('TestStand/temp_read_capture.bin', HLA=desibus)
-TemperatureRead.overview()
+PowerDown = Session('TestStand/PowerDown.bin', HLA=desibus)
+PowerDown.overview()
 ```
+This produces the following plot, with YELLOW = bus idle, GREEN = valid frames, RED = errors:
+![overview example](https://github.com/dkirkby/raccoon/blob/master/img/overview.png?raw=true)
+
+To show details, zoom in on specific buses and a narrow time interval using `Session.detail(buses, tstart, tstop)`. Use optional arguments to control what information is displayed. For example:
+```
+PowerDown.detail(0, tstart=0.09996, tstop=0.1002)
+```
+This displays:
+![detail example](https://github.com/dkirkby/raccoon/blob/master/img/detail.png?raw=true)
+
 
 ### Why the name?
 
