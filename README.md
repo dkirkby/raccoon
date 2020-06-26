@@ -32,7 +32,7 @@ This produces the following plot, with YELLOW = bus idle, GREEN = valid frames, 
 
 To show details, zoom in on specific buses and a narrow time interval using `Session.detail(buses, tstart, tstop)`. Use optional arguments to control what information is displayed. For example:
 ```
-PowerDown.detail(0, tstart=0.09996, tstop=0.1002)
+PowerDown.detail(buses=0, tstart=0.09996, tstop=0.1002)
 ```
 This displays:
 ![detail example](https://github.com/dkirkby/raccoon/blob/master/img/detail.png?raw=true)
