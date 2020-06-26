@@ -56,7 +56,8 @@ class CANdecoder(object):
             except StopIteration:
                 break
         # Convert results to numpy arrays.
-        self.samples = np.array(self.samples, np.uint8)
+        self.samples = np.array(self.samples, dtype=[
+            ('t', np.float32), ('level', np.uint8)])
         for k, v in self.errors.items():
             self.errors[k] = np.array(v, np.float32)
         self.annotations = np.array(self.annotations, dtype=[
@@ -209,6 +210,9 @@ class CANdecoder(object):
         tstart = self.sample_t[0] - 0.5
         tstop = self.sample_t[self.sample_k - 1] + 0.5
         self.frames.append((tstart, tstop, IDE, RTR, ident, DLC, data))
+        self.advance()
+
+    def advance(self):
         # Move the cursor to the next transition edge.
         self.cursor += self.sample_idx[self.sample_k - 1]
         # Sample the next potential packet.
