@@ -12,7 +12,7 @@ This code was originally developed to help debug CAN bus issues for the [Dark En
 
 Requires python >= 3.6, numpy and matplotlib:
 ```
-python -m pip install https://github.com/dkirkby/raccoon.git
+python -m pip install git+https://github.com/dkirkby/raccoon.git
 ```
 
 ## Usage
