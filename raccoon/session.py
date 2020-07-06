@@ -88,25 +88,31 @@ class Session(object):
         plt.grid()
         plt.tight_layout()
 
-    def detail(self, buses, tstart, tstop,
+    def detail(self, names, tstart, tstop,
                analog=True, digital=True, samples=True, annotations=True, HLA=True,
                width=14, height=2):
         """Display a detail plot for selected buses over a limited time interval.
         """
         if tstart < 0 or tstop > self.chunks[-1]:
             raise ValueError('Invalid tstart or tstop.')
-        buses = np.atleast_1d(buses)
-        nbus = len(buses)
-        fig, axes = plt.subplots(nbus, 1, figsize=(width, height * nbus), sharex=True, squeeze=False)
+        names = names.split(',')
+        invalid = [N for N in names if N not in self.CAN_names]
+        if any(invalid):
+            raise ValueError(f'Invalid bus name: {",".join(invalid)}.')
+        nchan = len(names)
+        fig, axes = plt.subplots(nchan, 1, figsize=(width, height * nchan), sharex=True, squeeze=False)
         plt.subplots_adjust(top=0.99, hspace=0.02, left=0.01, right=0.99)
         mul = 1e3
-        for ax, bus in zip(axes.flat, buses):
+        for ax, name in zip(axes.flat, names):
+            bus = self.CAN_names.index(name)
             D = self.decoder[bus]
             lo = int(np.floor(tstart / self.sampling_period))
             hi = int(np.ceil(tstop / self.sampling_period)) + 1
             tvec = mul * np.arange(lo, hi) * self.sampling_period
             ax.set_ylim(-0.05, 1.50)
             ax.set_yticks([])
+            ax.text(0.01, 0.01, name, transform=ax.transAxes, ha='left', va='bottom',
+                    fontsize=14, fontweight='bold', color='k')
             if analog:
                 rhs = ax.twinx()
                 rhs.plot(tvec, self.CAN_H[bus][lo:hi], 'k-', alpha=0.25, lw=1)
