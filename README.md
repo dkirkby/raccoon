@@ -22,9 +22,19 @@ Use a `Session` object to ingest, analyze and display raw CAN bus samples. Provi
 For example:
 ```
 from raccoon.session import Session
+from raccoon.saleae import load_analog_binary_v1
 from raccoon.desi import desibus
 
-PowerDown = Session('TestStand/PowerDown.bin', HLA=desibus)
+# Load binary data captured using Logic v1.2+ from a Saleae analyzer.
+samples, period = load_analog_binary_v1('TestStand/PowerDown.bin')
+
+# The binary format does not record channel names so we list them here by hand.
+names = 'CAN10L,CAN10H,CAN11L,CAN11H,CAN13L,CAN13H,CAN12L,CAN12H,CAN22L,CAN22H,CAN23L,CAN23H,CAN14L,CAN14H,CAN15L,CAN15H'
+
+# Initialize a forensics session using the DESI protocol for high-level packet analysis.
+PowerDown = Session(samples, period, names, HLA=desibus)
+
+# Display an overview plot of bus activity.
 PowerDown.overview()
 ```
 This produces the following plot, with YELLOW = bus idle, GREEN = valid frames, RED = errors:
