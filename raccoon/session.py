@@ -83,6 +83,7 @@ class Session(object):
                    cmap='RdYlGn', vmin=-vlim, vmax=+vlim,
                    extent=[0, 1e3 * self.chunks[-1], self.nbus - 0.5, -0.5])
         plt.yticks(np.arange(self.nbus), self.CAN_names)
+        plt.ylim(self.nbus - 0.5, -0.5)
         plt.xlabel('Elapsed Time [ms]')
         plt.grid()
         plt.tight_layout()
