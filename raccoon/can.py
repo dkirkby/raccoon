@@ -13,7 +13,7 @@ class CANerror(RuntimeError):
 
 class CANdecoder(object):
 
-    def __init__(self, times, x0, t0=0, rate=500000):
+    def __init__(self, times, x0, t0=0, rate=500000, name=None, HLA=None):
         """Initialize a CAN protocol decoder to parse a sequence of digital transitions.
 
         Parameters
@@ -26,14 +26,24 @@ class CANdecoder(object):
             Array of timestamps for logic level transitions.
         rate : float
             CAN data rate in bits per second.
+        name : str or None
+            Optional name identifying this bus.
+        HLA : callable or None
+            Optional high-level analysis interpreter to apply to all valid packets.
+            Will be called with a single-row numpy recarray with fields: t1, t2,
+            IDE, RTR, ID, DLC, DATA.  Returns a descriptive string if the packet was
+            successfully interpreted, or else returns None.
         """
-        assert x0 in (0, 1)
+        if x0 not in (0, 1):
+            raise ValueError(f'Expected x0 in (0,1) but got {x0}')
         self.x0 = x0
         self.rate = rate
         self.dt = rate * (np.asarray(times) - t0)
         self.crc_poly = np.uint16(0x4599)
         self.crc_mask = np.uint16(0x7fff)
         self.MAX_ANNOTATION_LENGTH = 12
+        self.name = name
+        self.HLA = HLA
 
     def run(self):
         self.cursor = 0

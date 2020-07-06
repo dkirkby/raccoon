@@ -47,7 +47,7 @@ class Session(object):
                 self.CAN_H[bus] - self.CAN_L[bus], threshold, hysteresis, inverted=True)
             digital_transitions = digital_transitions * self.sampling_period
             self.overview_data[bus] = np.histogram(digital_transitions, bins=self.chunks)[0] > 0
-            D = CANdecoder(digital_transitions, initial_level, rate=rate)
+            D = CANdecoder(digital_transitions, initial_level, rate=rate, name=name, HLA=HLA)
             self.decoder.append(D)
             D.run()
             if len(D.errors) > 0:
