@@ -59,17 +59,6 @@ class Session(object):
                     anybad += bad
                 self.overview_data[bus, anybad > 0] *= -1
             print(f'Decoded {len(D.frames)} frames on bus {bus}.')
-            if HLA is not None:
-                nbad = 0
-                for frame in D.frames:
-                    interpreted = HLA(frame)
-                    if interpreted is None:
-                        print('HLA error:', bus, f'{frame["ID"]:x}', frame['t1'] / D.rate, frame['t2'] / D.rate)
-                        nbad += 1
-                    else:
-                        self.HLA_annotations[bus].append((frame['t1'] / D.rate, frame['t2'] / D.rate, interpreted))
-                if nbad > 0:
-                    print(f'Unable to interpret {nbad} frames with high-level analyzer.')
 
     def overview(self, width=8, height=0.5):
         """Display an overview plot of all channels.
@@ -158,10 +147,12 @@ class Session(object):
                     ax.text(mul * 0.5 * (t1[i] + t2[i]) / D.rate, 1.15, label[i],
                             ha='center', va='center', color='k', fontsize=9, clip_on=True)
             if HLA:
-                for (t1, t2, label) in self.HLA_annotations[bus]:
-                    if ((t1 > tstart) and (t1 < tstop)) or ((t2 > tstart) and (t2 < tstop)) or ((t1 <= tstart) and (t2 >= tstop)):
+                for (t1, t2, label) in D.HLA_annotations:
+                    if (((t1 > tstart * D.rate) and (t1 < tstop * D.rate)) or
+                        ((t2 > tstart * D.rate) and (t2 < tstop * D.rate)) or
+                        ((t1 <= tstart * D.rate) and (t2 >= tstop * D.rate))):
                         ax.add_artist(plt.Rectangle(
-                            (mul * t1, 1.3), mul * (t2 - t1), 0.2, fill=True, ec='k', fc='skyblue'))
-                        ax.text(mul * 0.5 * (t1 + t2), 1.4, label,
+                            (mul * t1 / D.rate, 1.3), mul * (t2 - t1) / D.rate, 0.2, fill=True, ec='k', fc='skyblue'))
+                        ax.text(mul * 0.5 * (t1 + t2) / D.rate, 1.4, label,
                                 ha='center', va='center', color='k', fontsize=9, clip_on=True)
             ax.set_xlim(tvec[0], tvec[-1])
