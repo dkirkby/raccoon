@@ -13,16 +13,26 @@ class Session(object):
     def __init__(self, analog_samples, period, names, threshold=180, hysteresis=50, rate=500000, nchunks=100, HLA=None):
         """Initialize a forensics session using analog traces read from a file.
         """
+        self.analog_samples = np.asarray(analog_samples)
+        nchannels, nsamples = self.analog_samples.shape
         self.sampling_period = period
-        analog_samples = np.asarray(analog_samples)
-        nchannels, nsamples = analog_samples.shape
+        self.names = names.split(',')
         print(f'Created a session with {nchannels} channels of {nsamples} samples at {1e-6 / self.sampling_period:.1f} MHz.')
 
-        # Pair up CAN signals.
-        assert nchannels % 2 == 0
-        self.nbus = nchannels // 2
-        self.CAN_L = analog_samples[0::2]
-        self.CAN_H = analog_samples[1::2]
+        # Identify and pair up CAN H/L signals.
+        if len(self.names) != len(set(self.names)):
+            names, counts = np.unique(self.names, return_counts=True)
+            dups = names[counts > 1]
+            raise ValueError(f'Found duplicate names: {",".join(dups)}.')
+        H_names = set([N[:-1] for N in self.names if N[-1] == 'H'])
+        L_names = set([N[:-1] for N in self.names if N[-1] == 'L'])
+        if not (H_names == L_names):
+            unmatched = H_names ^ L_names
+            raise ValueError(f'Found unmatched CAN names: {",".join(unmatched)}.')
+        # Use the input order of H signal names to define the bus ordering.
+        self.CAN_names = [N[:-1] for N in self.names if N[-1] == 'H']
+        self.CAN_H, self.CAN_L = [], []
+        self.nbus = len(self.CAN_names)
 
         # Loop over buses.
         self.chunks = np.linspace(0, nsamples * self.sampling_period, nchunks + 1) - 0.5 * self.sampling_period
@@ -30,11 +40,13 @@ class Session(object):
         self.decoder = []
         self.HLA_annotations = [[] for i in range(self.nbus)]
         for bus in range(self.nbus):
+            name = self.CAN_names[bus]
+            self.CAN_H.append(self.analog_samples[self.names.index(name + 'H')])
+            self.CAN_L.append(self.analog_samples[self.names.index(name + 'L')])
             digital_transitions, initial_level = digitize(
                 self.CAN_H[bus] - self.CAN_L[bus], threshold, hysteresis, inverted=True)
             digital_transitions = digital_transitions * self.sampling_period
             self.overview_data[bus] = np.histogram(digital_transitions, bins=self.chunks)[0] > 0
-            #print(f'Bus {bus} has {len(digital_transitions)} digital transitions.')
             D = CANdecoder(digital_transitions, initial_level, rate=rate)
             self.decoder.append(D)
             D.run()
@@ -70,7 +82,7 @@ class Session(object):
         plt.imshow(self.overview_data, aspect='auto', origin='upper', interpolation='none',
                    cmap='RdYlGn', vmin=-vlim, vmax=+vlim,
                    extent=[0, 1e3 * self.chunks[-1], self.nbus - 0.5, -0.5])
-        plt.yticks(np.arange(self.nbus), [f'BUS{n}' for n in range(self.nbus)])
+        plt.yticks(np.arange(self.nbus), self.CAN_names)
         plt.xlabel('Elapsed Time [ms]')
         plt.grid()
         plt.tight_layout()
@@ -96,8 +108,8 @@ class Session(object):
             ax.set_yticks([])
             if analog:
                 rhs = ax.twinx()
-                rhs.plot(tvec, self.CAN_H[bus, lo:hi], 'k-', alpha=0.25, lw=1)
-                rhs.plot(tvec, self.CAN_L[bus, lo:hi], 'k-', alpha=0.25, lw=1)
+                rhs.plot(tvec, self.CAN_H[bus][lo:hi], 'k-', alpha=0.25, lw=1)
+                rhs.plot(tvec, self.CAN_L[bus][lo:hi], 'k-', alpha=0.25, lw=1)
                 rhs.set_yticks([])
             if digital:
                 idx_lo, idx_hi = np.searchsorted(D.dt, [tstart * D.rate, tstop * D.rate])
