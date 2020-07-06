@@ -10,15 +10,13 @@ from raccoon.can import CANdecoder
 
 class Session(object):
 
-    def __init__(self, filename, threshold=180, hysteresis=50, rate=500000, nchunks=100, HLA=None):
+    def __init__(self, analog_samples, period, names, threshold=180, hysteresis=50, rate=500000, nchunks=100, HLA=None):
         """Initialize a forensics session using analog traces read from a file.
-
-        Assumes a binary file written with v1.2+ and channels in (CAN_L, CAN_H) pairs for now.
         """
-        # Read analog samples.
-        analog_samples, self.sampling_period = load_analog_binary_v1(filename)
+        self.sampling_period = period
+        analog_samples = np.asarray(analog_samples)
         nchannels, nsamples = analog_samples.shape
-        print(f'Read {nchannels} channels of {nsamples} samples at {1e-6 / self.sampling_period:.1f} MHz.')
+        print(f'Created a session with {nchannels} channels of {nsamples} samples at {1e-6 / self.sampling_period:.1f} MHz.')
 
         # Pair up CAN signals.
         assert nchannels % 2 == 0
