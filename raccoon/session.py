@@ -93,6 +93,10 @@ class Session(object):
                width=14, height=2):
         """Display a detail plot for selected buses over a limited time interval.
         """
+        # Convert from ms to s.
+        tstart = 1e-3 * tstart
+        tstop = 1e-3 * tstop
+        mul = 1e3
         if tstart < 0 or tstop > self.chunks[-1]:
             raise ValueError('Invalid tstart or tstop.')
         names = names.split(',')
@@ -102,7 +106,6 @@ class Session(object):
         nchan = len(names)
         fig, axes = plt.subplots(nchan, 1, figsize=(width, height * nchan), sharex=True, squeeze=False)
         plt.subplots_adjust(top=0.99, hspace=0.02, left=0.01, right=0.99)
-        mul = 1e3
         for ax, name in zip(axes.flat, names):
             bus = self.CAN_names.index(name)
             D = self.decoder[bus]
