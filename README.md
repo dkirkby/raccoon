@@ -35,14 +35,14 @@ names = 'CAN10L,CAN10H,CAN11L,CAN11H,CAN13L,CAN13H,CAN12L,CAN12H,CAN22L,CAN22H,C
 PowerDown = Session(samples, period, names, HLA=desibus)
 
 # Display an overview plot of bus activity.
-PowerDown.overview()
+PowerDown.overview();
 ```
 This produces the following plot, with YELLOW = bus idle, GREEN = valid frames, RED = errors:
 ![overview example](https://github.com/dkirkby/raccoon/blob/master/img/overview.png?raw=true)
 
 To show details, zoom in on specific buses and a narrow time interval using `Session.detail(names, tstart, tstop)`. Use optional arguments to control what information is displayed. For example:
 ```
-PowerDown.detail('CAN11', 136.54, 136.70)
+PowerDown.detail('CAN11', 136.54, 136.70);
 ```
 This displays the following:
 ![detail example](https://github.com/dkirkby/raccoon/blob/master/img/detail.png?raw=true)

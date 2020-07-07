@@ -38,7 +38,6 @@ class Session(object):
         self.chunks = np.linspace(0, nsamples * self.sampling_period, nchunks + 1) - 0.5 * self.sampling_period
         self.overview_data = np.empty((self.nbus, nchunks))
         self.decoder = []
-        self.HLA_annotations = [[] for i in range(self.nbus)]
         for bus in range(self.nbus):
             name = self.CAN_names[bus]
             self.CAN_H.append(self.analog_samples[self.names.index(name + 'H')])
@@ -52,30 +51,38 @@ class Session(object):
             D.run()
             if len(D.errors) > 0:
                 anybad = np.zeros(len(self.chunks) - 1)
-                print(f'Found {len(D.errors)} errors on bus {bus}:')
+                print(f'Found {len(D.errors)} errors on {name}:')
                 for error_type, error_times in D.errors.items():
                     print(f'{len(error_times):6d} {error_type}')
                     bad, _ = np.histogram(error_times / D.rate, bins=self.chunks)
                     anybad += bad
                 self.overview_data[bus, anybad > 0] *= -1
-            print(f'Decoded {len(D.frames)} frames on bus {bus}.')
+            print(f'Decoded {len(D.frames)} frames on {name}.')
+            if D.HLA_errors > 0:
+                print(f'HLA was unable to interpret {D.HLA_errors} frames on {name}.')
 
-    def overview(self, width=8, height=0.5):
+    def overview(self, width=8, height=0.5, margin=1):
         """Display an overview plot of all channels.
 
         The sampling timeline is divided into ``nchunks`` discrete intervals that are colorcoded
         according to their activity level (yellow = idle, green = valid packets, red = errors).
         """
-        vlim = np.max(np.abs(self.overview_data))
-        fig = plt.figure(figsize=(width, height * self.nbus))
-        plt.imshow(self.overview_data, aspect='auto', origin='upper', interpolation='none',
-                   cmap='RdYlGn', vmin=-vlim, vmax=+vlim,
-                   extent=[0, 1e3 * self.chunks[-1], self.nbus - 0.5, -0.5])
-        plt.yticks(np.arange(self.nbus), self.CAN_names)
-        plt.ylim(self.nbus - 0.5, -0.5)
-        plt.xlabel('Elapsed Time [ms]')
-        plt.grid()
-        plt.tight_layout()
+        nrows, nchunks = self.overview_data.shape
+        assert nrows == self.nbus
+        fig, ax = plt.subplots(figsize=(width + margin, height * nrows + margin))
+        plt.subplots_adjust(left=margin / fig.get_figwidth(), right=1, bottom=margin / fig.get_figheight(), top=1)
+        ax.imshow(self.overview_data, origin='upper', interpolation='none',
+                  cmap='RdYlGn', vmin=-1, vmax=+1, aspect='auto',
+                  extent=[0, 1e3 * self.chunks[-1], self.nbus - 0.5, -0.5])
+        ax.set_xlabel('Elapsed Time [ms]')
+        ax.grid(which='major', axis='x')
+        ax.set_yticks(np.arange(nrows), minor=False)
+        ax.set_yticklabels(self.CAN_names)
+        ax.set_yticks([0.5], minor=True)
+        ax.tick_params(axis='y', which='major', left=False)
+        ax.grid(which='minor', axis='y')
+        ax.set_ylim(self.nbus - 0.5, -0.5)
+        return fig, ax
 
     def detail(self, names, tstart, tstop,
                analog=True, digital=True, samples=True, annotations=True, HLA=True,
@@ -156,3 +163,4 @@ class Session(object):
                         ax.text(mul * 0.5 * (t1 + t2) / D.rate, 1.4, label,
                                 ha='center', va='center', color='k', fontsize=9, clip_on=True)
             ax.set_xlim(tvec[0], tvec[-1])
+        return fig, axes

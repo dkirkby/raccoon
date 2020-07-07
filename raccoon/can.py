@@ -76,16 +76,14 @@ class CANdecoder(object):
             ('t1', np.float32), ('t2', np.float32), ('IDE', np.uint8), ('RTR', np.uint8),
             ('ID', np.uint32), ('DLC', np.uint8), ('DATA', np.uint8, 8)])
         self.HLA_annotations = []
+        self.HLA_errors = 0
         if self.HLA is not None:
-            nbad = 0
             for frame in self.frames:
                 interpreted = self.HLA(frame)
                 if interpreted is None:
                     interpreted = '???'
-                    nbad += 1
+                    self.HLA_errors += 1
                 self.HLA_annotations.append((frame['t1'], frame['t2'], interpreted))
-            if nbad > 0:
-                print(f'Unable to interpret {nbad} frames with high-level analyzer.')
 
 
     @property
