@@ -37,7 +37,7 @@ class Session(object):
         # Loop over buses.
         self.chunks = np.linspace(0, nsamples * self.sampling_period, nchunks + 1) - 0.5 * self.sampling_period
         self.overview_data = np.empty((self.nbus, nchunks))
-        self.decoder = []
+        self.decoder = {}
         for bus in range(self.nbus):
             name = self.CAN_names[bus]
             self.CAN_H.append(self.analog_samples[self.names.index(name + 'H')])
@@ -47,7 +47,7 @@ class Session(object):
             digital_transitions = digital_transitions * self.sampling_period
             self.overview_data[bus] = np.histogram(digital_transitions, bins=self.chunks)[0] > 0
             D = CANdecoder(digital_transitions, initial_level, rate=rate, name=name, HLA=HLA)
-            self.decoder.append(D)
+            self.decoder[name] = D
             D.run()
             if len(D.errors) > 0:
                 anybad = np.zeros(len(self.chunks) - 1)
@@ -104,7 +104,7 @@ class Session(object):
         plt.subplots_adjust(top=0.99, hspace=0.02, left=0.01, right=0.99)
         for ax, name in zip(axes.flat, names):
             bus = self.CAN_names.index(name)
-            D = self.decoder[bus]
+            D = self.decoder[name]
             lo = int(np.floor(tstart / self.sampling_period))
             hi = int(np.ceil(tstop / self.sampling_period)) + 1
             tvec = mul * np.arange(lo, hi) * self.sampling_period
