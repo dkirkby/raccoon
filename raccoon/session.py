@@ -61,7 +61,7 @@ class Session(object):
             if D.HLA_errors > 0:
                 print(f'HLA was unable to interpret {D.HLA_errors} frames on {name}.')
 
-    def overview(self, width=8, height=0.5, margin=1):
+    def overview(self, width=8, height=0.5, margin=0.6):
         """Display an overview plot of all channels.
 
         The sampling timeline is divided into ``nchunks`` discrete intervals that are colorcoded

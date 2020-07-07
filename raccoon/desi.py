@@ -44,25 +44,35 @@ desi_commands = {
     49: 'get_fid_pwm_frequency',
 }
 
-def desibus(frame):
-    """Implement the session high-level analysis (HLA) API.
-    """
-    response = bool(frame['ID'] & 0x10000000)
-    if response:
-        positioner_id = frame['ID'] & 0xfffff
-        return f'<={positioner_id:05x}'
-    else:
-        command_id = frame['ID'] & 0xff
-        if command_id not in desi_commands:
-            return None
-        command_name = desi_commands[command_id]
-        positioner_id = frame['ID'] >> 8
-        if positioner_id == 20000:
-            positioner_name = 'ALL'
-        elif positioner_id == 20001:
-            positioner_name= 'ALLPOS'
-        elif positioner_id == 20002:
-            positioner_name = 'ALLFID'
+class DESIcanbus(object):
+
+    def __init__(self):
+        self.last_command_id = None
+
+    def __call__(self, frame):
+        """Implement the session high-level analysis (HLA) API.
+        """
+        response = bool(frame['ID'] & 0x10000000)
+        if response:
+            positioner_id = frame['ID'] & 0xfffff
+            if self.last_command_id == 9:
+                temperature = (frame['DATA'][1] << 8) | frame['DATA'][0]
+                return f'{positioner_id:d} T={temperature:04X}'
+            else:
+                return f'<={positioner_id:d}'
         else:
-            positioner_name = f'{positioner_id:05x}'
-        return f'{command_name}=>{positioner_name}'
+            command_id = frame['ID'] & 0xff
+            if command_id not in desi_commands:
+                return None
+            command_name = desi_commands[command_id]
+            positioner_id = frame['ID'] >> 8
+            if positioner_id == 20000:
+                positioner_name = 'ALL'
+            elif positioner_id == 20001:
+                positioner_name= 'ALLPOS'
+            elif positioner_id == 20002:
+                positioner_name = 'ALLFID'
+            else:
+                positioner_name = f'{positioner_id:d}'
+            self.last_command_id = command_id
+            return f'{command_name}=>{positioner_name}'
