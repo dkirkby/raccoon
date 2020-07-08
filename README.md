@@ -40,7 +40,7 @@ PowerDown.overview();
 This produces the following plot, with YELLOW = bus idle, GREEN = valid frames, RED = errors:
 ![overview example](https://github.com/dkirkby/raccoon/blob/master/img/overview.png?raw=true)
 
-To show details, zoom in on specific buses and a narrow time interval using `Session.detail(names, tstart, tstop)`. Use optional arguments to control what information is displayed. For example:
+To show details, zoom in on specific buses and a narrow time interval using `Session.detail(names, tstart, tstop)`. Use optional format argument to control what information is displayed. For example:
 ```
 PowerDown.detail('CAN11', 136.54, 136.70);
 ```

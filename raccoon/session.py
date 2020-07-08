@@ -10,7 +10,7 @@ from raccoon.can import CANdecoder
 
 class Session(object):
 
-    def __init__(self, analog_samples, period, names, threshold=180, hysteresis=50, rate=500000, nchunks=100, HLA=None):
+    def __init__(self, analog_samples, period, names, threshold=180, hysteresis=50, rate=500000, nchunks=256, HLA=None):
         """Initialize a forensics session using analog traces read from a file.
         """
         self.analog_samples = np.asarray(analog_samples)
