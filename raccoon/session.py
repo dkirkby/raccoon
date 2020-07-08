@@ -1,5 +1,7 @@
 """Top-level session management.
 """
+import sys
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -83,6 +85,25 @@ class Session(object):
         ax.grid(which='minor', axis='y')
         ax.set_ylim(self.nbus - 0.5, -0.5)
         return fig, ax
+
+    def list(self, name, first=0, last=None, file=sys.stdout):
+        D = self.decoder[name]
+        frames = D.frames[first: last]
+        hdr = '  N     tstart      tstop    ID    DATA'
+        if D.HLA:
+            hdr += (' ' * 20) + 'HLA'
+        print(hdr, file=file)
+        for k, frame in enumerate(frames):
+            line = f'{first + k:3d} {1e3 * frame["t1"] / D.rate:10.3f} {1e3 * frame["t2"] / D.rate:10.3f} {frame["ID"]:08X}'
+            DLC = frame["DLC"]
+            if frame['RTR']:
+                data = f'REMOTE DLC={DLC}'
+            else:
+                data = ','.join([f'{x:02X}' for x in frame["DATA"][:DLC]])
+            line += f' {data:23s}'
+            if D.HLA:
+                line += f' {D.HLA_annotations[first + k][2]}'
+            print(line, file=file)
 
     def detail(self, names, tstart, tstop, format='Af', width=14, height=2):
         """Display a detail plot for selected buses over a limited time interval.

@@ -40,6 +40,17 @@ PowerDown.overview();
 This produces the following plot, with YELLOW = bus idle, GREEN = valid frames, RED = errors:
 ![overview example](https://github.com/dkirkby/raccoon/blob/master/img/overview.png?raw=true)
 
+To list the decoded frames for a specific bus, use:
+```
+PowerDown.list('CAN10')
+```
+which shows that there were two valid frames on this bus separated by about 40ms:
+```
+  N     tstart      tstop    ID    DATA                    HLA
+  0    100.000    100.142 004E2128                         enter_stop_mode, exit via SYNC=>ALLPOS
+  1    140.606    140.748 004E2128                         enter_stop_mode, exit via SYNC=>ALLPOS
+```
+
 To show details, zoom in on specific buses and a narrow time interval using `Session.detail(names, tstart, tstop)`. Use optional format argument to control what information is displayed. For example:
 ```
 PowerDown.detail('CAN11', 136.54, 136.70);
