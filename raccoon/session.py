@@ -84,10 +84,15 @@ class Session(object):
         ax.set_ylim(self.nbus - 0.5, -0.5)
         return fig, ax
 
-    def detail(self, names, tstart, tstop,
-               analog=True, digital=True, samples=True, annotations=True, HLA=True,
-               width=14, height=2):
+    def detail(self, names, tstart, tstop, format='Af', width=14, height=2):
         """Display a detail plot for selected buses over a limited time interval.
+
+        The format string is a concatenation of the options to select what to display:
+        A: analog traces
+        D: digital transitions
+        S: sampled binary values, after synchronization and bit stuffing
+        F: frame fields (use 'f' to omit text labels)
+        H: high-level interpretation (use 'h' to omit text labels)
         """
         # Convert from ms to s.
         tstart = 1e-3 * tstart
@@ -112,12 +117,12 @@ class Session(object):
             ax.set_yticks([])
             ax.text(0.01, 0.01, name, transform=ax.transAxes, ha='left', va='bottom',
                     fontsize=14, fontweight='bold', color='k')
-            if analog:
+            if 'A' in format:
                 rhs = ax.twinx()
                 rhs.plot(tvec, self.CAN_H[bus][lo:hi], 'k-', alpha=0.25, lw=1)
                 rhs.plot(tvec, self.CAN_L[bus][lo:hi], 'k-', alpha=0.25, lw=1)
                 rhs.set_yticks([])
-            if digital:
+            if 'D' in format:
                 idx_lo, idx_hi = np.searchsorted(D.dt, [tstart * D.rate, tstop * D.rate])
                 segments = [[tstart], D.dt[idx_lo: idx_hi + 1] / D.rate]
                 if idx_hi == len(D.dt):
@@ -128,14 +133,14 @@ class Session(object):
                 x_wave = (D.x0 + idx_lo - 1 + np.arange(len(dt) + 1)) % 2
                 x_wave = np.stack((x_wave, x_wave)).T.reshape(-1)[1:-1]
                 ax.plot(mul * t_wave, x_wave, c='C0', ls='-', lw=2, alpha=0.5)
-            if samples:
+            if 'S' in format:
                 idx_lo, idx_hi = np.searchsorted(D.samples['t'], [tstart * D.rate, tstop * D.rate])
                 for i in range(idx_lo, idx_hi):
                     t, level = D.samples[i]['t'], D.samples[i]['level']
                     label = str(level) if level < 2 else ('-' if (level & 2) else 'X')
                     ax.text(mul * t / D.rate, 0.9, label, ha='center', va='top',
                             color='C0', backgroundcolor='w', fontsize=8)
-            if annotations:
+            if 'F' in format.upper():
                 t1, t2, label = D.annotations['t1'], D.annotations['t2'], D.annotations['label']
                 t1_in = (t1 > tstart * D.rate) & (t1 < tstop * D.rate)
                 t2_in = (t2 > tstart * D.rate) & (t2 < tstop * D.rate)
@@ -151,16 +156,18 @@ class Session(object):
                         color = 'lightgray'
                     ax.add_artist(plt.Rectangle(
                         (mul * t1[i] / D.rate, 1.05), mul * (t2[i] - t1[i]) / D.rate, 0.2, fill=True, ec='k', fc=color))
-                    ax.text(mul * 0.5 * (t1[i] + t2[i]) / D.rate, 1.15, label[i],
-                            ha='center', va='center', color='k', fontsize=9, clip_on=True)
-            if HLA:
+                    if 'F' in format:
+                        ax.text(mul * 0.5 * (t1[i] + t2[i]) / D.rate, 1.15, label[i],
+                                ha='center', va='center', color='k', fontsize=9, clip_on=True)
+            if 'H' in format.upper():
                 for (t1, t2, label) in D.HLA_annotations:
                     if (((t1 > tstart * D.rate) and (t1 < tstop * D.rate)) or
                         ((t2 > tstart * D.rate) and (t2 < tstop * D.rate)) or
                         ((t1 <= tstart * D.rate) and (t2 >= tstop * D.rate))):
                         ax.add_artist(plt.Rectangle(
                             (mul * t1 / D.rate, 1.3), mul * (t2 - t1) / D.rate, 0.2, fill=True, ec='k', fc='skyblue'))
-                        ax.text(mul * 0.5 * (t1 + t2) / D.rate, 1.4, label,
-                                ha='center', va='center', color='k', fontsize=9, clip_on=True)
+                        if 'H' in format:
+                            ax.text(mul * 0.5 * (t1 + t2) / D.rate, 1.4, label,
+                                    ha='center', va='center', color='k', fontsize=9, clip_on=True)
             ax.set_xlim(tvec[0], tvec[-1])
         return fig, axes
