@@ -80,7 +80,7 @@ class Session(object):
         ax.grid(which='major', axis='x')
         ax.set_yticks(np.arange(nrows), minor=False)
         ax.set_yticklabels(self.CAN_names)
-        ax.set_yticks([0.5], minor=True)
+        ax.set_yticks(0.5 + np.arange(nrows - 1), minor=True)
         ax.tick_params(axis='y', which='major', left=False)
         ax.grid(which='minor', axis='y')
         ax.set_ylim(self.nbus - 0.5, -0.5)
