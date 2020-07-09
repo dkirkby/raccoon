@@ -140,10 +140,11 @@ class Session(object):
         Returns
         -------
         float
-            Timestamp value in milliseconds.
+            Timestamp value in seconds.
         """
         try:
-            return float(encoded)
+            # Convert from ms to s.
+            return 1e3 * float(encoded)
         except ValueError:
             pass
         parsed = self.timestamp_format.match(encoded)
@@ -164,11 +165,11 @@ class Session(object):
         except IndexError:
             raise ValueError(f'Frame index {idx} out of range for {len(D.frames)} frames.')
         if pre is not None:
-            return 1e3 * (frame['t1'] + int(pre)) / D.rate
+            return (frame['t1'] + int(pre)) / D.rate
         else:
-            return 1e3 * (frame['t2'] + int(post)) / D.rate
+            return (frame['t2'] + int(post)) / D.rate
 
-    def detail(self, names, tstart, tstop, format='Af', tabs=False, width=14, height=2):
+    def detail(self, names, tstart, tstop, format='Af', tabs=False, width=14, height=2, margin=0.5):
         """Display a detail plot for selected buses over a limited time interval.
 
         The tstart and tstop values can either be specified in milliseconds or
@@ -190,16 +191,25 @@ class Session(object):
         if any(invalid):
             raise ValueError(f'Invalid bus name: {",".join(invalid)}.')
         nchan = len(names)
-        # Decode timestamps and convert from ms to s.
+        # Decode timestamps.
         default_name = names[0]
-        tstart = 1e-3 * self.timestamp(tstart, default_name)
-        tstop = 1e-3 * self.timestamp(tstop, default_name)
-        mul = 1e3
+        tstart = self.timestamp(tstart, default_name)
+        tstop = self.timestamp(tstop, default_name)
         if tstart < 0 or tstop > self.chunks[-1]:
             raise ValueError('Invalid tstart or tstop.')
+        # Select display units based on the display range.
+        trange = tstop - tstart
+        if trange > 1:
+            mul, unit = 1, 's'
+        elif trange > 0.001:
+            mul, unit = 1e3, 'ms'
+        else:
+            mul, unit = 1e6, 'us'
+        # Select display time origin.
         tzero = 0 if tabs else mul * tstart
-        fig, axes = plt.subplots(nchan, 1, figsize=(width, height * nchan), sharex=True, squeeze=False)
-        plt.subplots_adjust(top=0.99, hspace=0.02, left=0.01, right=0.99)
+        # Initialize plots.
+        fig, axes = plt.subplots(nchan, 1, figsize=(width, height * nchan + margin), sharex=True, squeeze=False)
+        plt.subplots_adjust(top=0.99, hspace=0.02, left=0.01, right=0.99, bottom=margin / fig.get_figheight())
         for ax, name in zip(axes.flat, names):
             bus = self.CAN_names.index(name)
             D = self.decoder[name]
@@ -264,6 +274,6 @@ class Session(object):
                         if 'H' in format:
                             ax.text(mul * 0.5 * (t1 + t2) / D.rate - tzero, 1.4, label,
                                     ha='center', va='center', color='k', fontsize=9, clip_on=True)
-            #ax.set_xlim(tvec[0], tvec[-1])
             ax.set_xlim(mul * tstart - tzero, mul * tstop - tzero)
+            ax.set_xlabel(f'Time [{unit}]')
         return fig, axes
