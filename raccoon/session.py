@@ -169,7 +169,7 @@ class Session(object):
         else:
             return (frame['t2'] + int(post)) / D.rate
 
-    def detail(self, names, tstart, tstop, format='Af', tabs=False, width=14, height=2, margin=0.5):
+    def detail(self, names, tstart, tstop, format='Af', tzero='display', width=14, height=2, margin=0.5):
         """Display a detail plot for selected buses over a limited time interval.
 
         The tstart and tstop values can either be specified in milliseconds or
@@ -183,8 +183,12 @@ class Session(object):
         F: frame fields (use 'f' to omit text labels)
         H: high-level interpretation (use 'h' to omit text labels)
 
-        Set tabs True to display absolute times in ms on the x axis. Otherwise, times
-        are relative to the displayed left edge in ms.
+        Use tzero to configure the plot time origin. The default value of 'display' is
+        relative to the left edge of the displayed data.  Otherwise, the value is
+        interpreted by :meth:`timestamp`.
+
+        Display time units are selected automatically from s/ms/us depending on the
+        displayed range of times.
         """
         names = names.split(',')
         invalid = [N for N in names if N not in self.CAN_names]
@@ -206,7 +210,11 @@ class Session(object):
         else:
             mul, unit = 1e6, 'us'
         # Select display time origin.
-        tzero = 0 if tabs else mul * tstart
+        if tzero is 'display':
+            tzero = tstart
+        else:
+            tzero = self.timestamp(tzero, default_name)
+        tzero *= mul
         # Initialize plots.
         fig, axes = plt.subplots(nchan, 1, figsize=(width, height * nchan + margin), sharex=True, squeeze=False)
         plt.subplots_adjust(top=0.99, hspace=0.02, left=0.01, right=0.99, bottom=margin / fig.get_figheight())
@@ -276,4 +284,6 @@ class Session(object):
                                     ha='center', va='center', color='k', fontsize=9, clip_on=True)
             ax.set_xlim(mul * tstart - tzero, mul * tstop - tzero)
             ax.set_xlabel(f'Time [{unit}]')
+            if (tzero > mul * tstart) and (tzero < mul * tstop):
+                ax.axvline(0, ls=':', c='k', alpha=0.5, lw=2)
         return fig, axes
