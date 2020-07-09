@@ -1,6 +1,7 @@
 """Top-level session management.
 """
 import sys
+import re
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -62,6 +63,8 @@ class Session(object):
             print(f'Decoded {len(D.frames)} frames on {name}.')
             if D.HLA_errors > 0:
                 print(f'HLA was unable to interpret {D.HLA_errors} frames on {name}.')
+        # Initialize timestamp parser.
+        self.timestamp_format = re.compile('^([+-]\d+)?\[(?:(\w+):)?(-?\d+)\]([+-]\d+)?$')
 
     def overview(self, width=8, height=0.5, margin=0.6):
         """Display an overview plot of all channels.
@@ -105,8 +108,72 @@ class Session(object):
                 line += f' {D.HLA_annotations[first + k][2]}'
             print(line, file=file)
 
-    def detail(self, names, tstart, tstop, format='Af', width=14, height=2):
+    def timestamp(self, encoded, default_name=None):
+        """Decode a timestamp specification.
+
+        The value should either be specified as a floating point value in ms or
+        as a string in the format:
+
+        <PRE>[<NAME>:<INDEX>]   or    [<NAME>:<INDEX>]<POST>
+
+        where:
+        - <NAME> identifies the bus to use, or use ``default_name`` when omitted.
+        - <INDEX> specifies the integer frame index to use, and can be negative.
+        - <PRE> and <POST> are signed integer offsets in units of the nominal bit time
+        with '+' required, e.g. +1, -2.
+
+        The first form specifies a time relative to the start of the specified frame.
+        For example, -2[CAN10:2] is 2 bit times (4us at 0.5Mbs) before the first
+        edge (start bit) of the 2nd frame on bus CAN10.
+
+        The second form specifies a time relative to the end of the specified frame.
+        For example, [-1]+5 is 5 bit times (10us at 0.5Mbs) after the interframe
+        space of the last (index -1) frame on the default bus.
+
+        Parameters
+        ----------
+        encoded : float or string
+            Timestamp value in milliseconds or encoded string.
+        default_name : string or None
+            Default bus name to use when not specified.
+
+        Returns
+        -------
+        float
+            Timestamp value in milliseconds.
+        """
+        try:
+            return float(encoded)
+        except ValueError:
+            pass
+        parsed = self.timestamp_format.match(encoded)
+        if not parsed:
+            raise ValueError(f'Unable to parse timestamp "{encoded}".')
+        pre, name, idx, post = parsed.groups()
+        if pre is not None and post is not None:
+            raise ValueError(f'Cannot specify pre and post offsets in timestamp: "{encoded}".')
+        if pre is None and post is None:
+            raise ValueError(f'Must specify either a pre or post offset in timestamp: "{encoded}".')
+        name = name or default_name
+        try:
+            D = self.decoder.get(name)
+        except KeyError:
+            raise ValueError(f'Invalid bus name "{name}".')
+        try:
+            frame = D.frames[int(idx)]
+        except IndexError:
+            raise ValueError(f'Frame index {idx} out of range for {len(D.frames)} frames.')
+        if pre is not None:
+            return 1e3 * (frame['t1'] + int(pre)) / D.rate
+        else:
+            return 1e3 * (frame['t2'] + int(post)) / D.rate
+
+    def detail(self, names, tstart, tstop, format='Af', tabs=False, width=14, height=2):
         """Display a detail plot for selected buses over a limited time interval.
+
+        The tstart and tstop values can either be specified in milliseconds or
+        relative to the start or end of any decoded frame.  See meth:`timestamp`
+        for details on how frame relative values are encoded.
 
         The format string is a concatenation of the options to select what to display:
         A: analog traces
@@ -114,18 +181,23 @@ class Session(object):
         S: sampled binary values, after synchronization and bit stuffing
         F: frame fields (use 'f' to omit text labels)
         H: high-level interpretation (use 'h' to omit text labels)
+
+        Set tabs True to display absolute times in ms on the x axis. Otherwise, times
+        are relative to the displayed left edge in ms.
         """
-        # Convert from ms to s.
-        tstart = 1e-3 * tstart
-        tstop = 1e-3 * tstop
-        mul = 1e3
-        if tstart < 0 or tstop > self.chunks[-1]:
-            raise ValueError('Invalid tstart or tstop.')
         names = names.split(',')
         invalid = [N for N in names if N not in self.CAN_names]
         if any(invalid):
             raise ValueError(f'Invalid bus name: {",".join(invalid)}.')
         nchan = len(names)
+        # Decode timestamps and convert from ms to s.
+        default_name = names[0]
+        tstart = 1e-3 * self.timestamp(tstart, default_name)
+        tstop = 1e-3 * self.timestamp(tstop, default_name)
+        mul = 1e3
+        if tstart < 0 or tstop > self.chunks[-1]:
+            raise ValueError('Invalid tstart or tstop.')
+        tzero = 0 if tabs else mul * tstart
         fig, axes = plt.subplots(nchan, 1, figsize=(width, height * nchan), sharex=True, squeeze=False)
         plt.subplots_adjust(top=0.99, hspace=0.02, left=0.01, right=0.99)
         for ax, name in zip(axes.flat, names):
@@ -140,8 +212,8 @@ class Session(object):
                     fontsize=14, fontweight='bold', color='k')
             if 'A' in format:
                 rhs = ax.twinx()
-                rhs.plot(tvec, self.CAN_H[bus][lo:hi], 'k-', alpha=0.25, lw=1)
-                rhs.plot(tvec, self.CAN_L[bus][lo:hi], 'k-', alpha=0.25, lw=1)
+                rhs.plot(tvec - tzero, self.CAN_H[bus][lo:hi], 'k-', alpha=0.25, lw=1)
+                rhs.plot(tvec - tzero, self.CAN_L[bus][lo:hi], 'k-', alpha=0.25, lw=1)
                 rhs.set_yticks([])
             if 'D' in format:
                 idx_lo, idx_hi = np.searchsorted(D.dt, [tstart * D.rate, tstop * D.rate])
@@ -153,13 +225,13 @@ class Session(object):
                 t_wave = np.stack((dt, dt)).T.reshape(-1)
                 x_wave = (D.x0 + idx_lo - 1 + np.arange(len(dt) + 1)) % 2
                 x_wave = np.stack((x_wave, x_wave)).T.reshape(-1)[1:-1]
-                ax.plot(mul * t_wave, x_wave, c='C0', ls='-', lw=2, alpha=0.5)
+                ax.plot(mul * t_wave - tzero, x_wave, c='C0', ls='-', lw=2, alpha=0.5)
             if 'S' in format:
                 idx_lo, idx_hi = np.searchsorted(D.samples['t'], [tstart * D.rate, tstop * D.rate])
                 for i in range(idx_lo, idx_hi):
                     t, level = D.samples[i]['t'], D.samples[i]['level']
                     label = str(level) if level < 2 else ('-' if (level & 2) else 'X')
-                    ax.text(mul * t / D.rate, 0.9, label, ha='center', va='top',
+                    ax.text(mul * t / D.rate - tzero, 0.9, label, ha='center', va='top',
                             color='C0', backgroundcolor='w', fontsize=8)
             if 'F' in format.upper():
                 t1, t2, label = D.annotations['t1'], D.annotations['t2'], D.annotations['label']
@@ -176,9 +248,10 @@ class Session(object):
                     else:
                         color = 'lightgray'
                     ax.add_artist(plt.Rectangle(
-                        (mul * t1[i] / D.rate, 1.05), mul * (t2[i] - t1[i]) / D.rate, 0.2, fill=True, ec='k', fc=color))
+                        (mul * t1[i] / D.rate - tzero, 1.05), mul * (t2[i] - t1[i]) / D.rate, 0.2,
+                        fill=True, ec='k', fc=color))
                     if 'F' in format:
-                        ax.text(mul * 0.5 * (t1[i] + t2[i]) / D.rate, 1.15, label[i],
+                        ax.text(mul * 0.5 * (t1[i] + t2[i]) / D.rate - tzero, 1.15, label[i],
                                 ha='center', va='center', color='k', fontsize=9, clip_on=True)
             if 'H' in format.upper():
                 for (t1, t2, label) in D.HLA_annotations:
@@ -186,9 +259,11 @@ class Session(object):
                         ((t2 > tstart * D.rate) and (t2 < tstop * D.rate)) or
                         ((t1 <= tstart * D.rate) and (t2 >= tstop * D.rate))):
                         ax.add_artist(plt.Rectangle(
-                            (mul * t1 / D.rate, 1.3), mul * (t2 - t1) / D.rate, 0.2, fill=True, ec='k', fc='skyblue'))
+                            (mul * t1 / D.rate - tzero, 1.3), mul * (t2 - t1) / D.rate, 0.2,
+                            fill=True, ec='k', fc='skyblue'))
                         if 'H' in format:
-                            ax.text(mul * 0.5 * (t1 + t2) / D.rate, 1.4, label,
+                            ax.text(mul * 0.5 * (t1 + t2) / D.rate - tzero, 1.4, label,
                                     ha='center', va='center', color='k', fontsize=9, clip_on=True)
-            ax.set_xlim(tvec[0], tvec[-1])
+            #ax.set_xlim(tvec[0], tvec[-1])
+            ax.set_xlim(mul * tstart - tzero, mul * tstop - tzero)
         return fig, axes
