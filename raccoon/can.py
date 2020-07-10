@@ -5,10 +5,22 @@ import numpy as np
 
 
 class CANerror(RuntimeError):
-    """First ctor arg is a string specifying the generic error type.
-    Any subsequent args provide details for a specific error.
+    """Exception generated to signal a CAN decoding error.
+
+    Parameters
+    ----------
+    error_type : str
+        Generic error category, used to count number of occurences.
+    details : str
+        Specific details about this error.
+    handle_error : bool
+        Attempt to decode an error frame starting at the next bit when True.
     """
-    pass
+    def __init__(self, category, details='', handle_error=False):
+        super().__init__()
+        self.category = category
+        self.details = details
+        self.handle_error = handle_error
 
 
 class CANdecoder(object):
@@ -57,9 +69,12 @@ class CANdecoder(object):
                 self.decode()
             except CANerror as e:
                 t_error = self.sample_t[self.sample_k - 1]
-                self.errors[e.args[0]].append(t_error)
+                self.errors[e.category].append(t_error)
                 self.annotations.append((t_error - 0.5, t_error + 0.5, '!'))
                 try:
+                    if e.handle_error:
+                        print('Handling error')
+                        self.handle_error()
                     self.advance()
                 except StopIteration:
                     break
@@ -151,7 +166,8 @@ class CANdecoder(object):
                 if xstuffed == self.last_level:
                     # Set bit-2 to flag invalid stuffed bit.
                     self.samples.append((self.sample_t[self.sample_k], xstuffed | 4))
-                    raise CANerror('Error frame detected', f'starts at bit {self.sample_k}')
+                    self.sample_k += 1
+                    raise CANerror('Stuff bit error', f'starts at bit {self.sample_k}', handle_error=True)
                 else:
                     # Set bit-1 to flag valid stuffed bit.
                     self.samples.append((self.sample_t[self.sample_k], xstuffed | 2))
@@ -187,6 +203,24 @@ class CANdecoder(object):
                 print('WARNING: truncating annotation label "{formatted}".')
             self.annotations.append((t_lo, t_hi, formatted[:self.MAX_ANNOTATION_LENGTH]))
         return value
+
+    def handle_error(self, ndelim=8):
+        # Read the next 6 bits.
+        error = self.nextfield(6, '!ERROR', unstuff=False, update_crc=False)
+        # Read bits until we find an error delimeter of ndelim consecutive recessive bits.
+        delim_count = 0
+        while delim_count < ndelim:
+            x = self.nextbit(unstuff=False, update_crc=False)
+            if x == 1:
+                delim_count += 1
+            else:
+                delim_count = 0
+        # Annotate the delimiter.
+        t_hi = self.sample_t[self.sample_k] - 0.5
+        t_lo = t_hi - ndelim
+        self.annotations.append((t_lo, t_hi, '!DELIM'))
+        # Read the expected inter-frame space.
+        IFS = self.nextfield(3, label='!IFS', unstuff=False, update_crc=False)
 
     def decode(self):
         self.crc = np.uint16(0)

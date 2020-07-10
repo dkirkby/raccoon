@@ -144,7 +144,7 @@ class Session(object):
         """
         try:
             # Convert from ms to s.
-            return 1e3 * float(encoded)
+            return 1e-3 * float(encoded)
         except ValueError:
             pass
         parsed = self.timestamp_format.match(encoded)
@@ -199,8 +199,10 @@ class Session(object):
         default_name = names[0]
         tstart = self.timestamp(tstart, default_name)
         tstop = self.timestamp(tstop, default_name)
-        if tstart < 0 or tstop > self.chunks[-1]:
-            raise ValueError('Invalid tstart or tstop.')
+        if tstart < 0:
+            raise ValueError(f'Invalid tstart < 0: {tstart}.')
+        if tstop > self.chunks[-1]:
+            raise ValueError(f'Invalid tstop > {self.chunks[-1]:.3f}: {tstop}.')
         # Select display units based on the display range.
         trange = tstop - tstart
         if trange > 1:
