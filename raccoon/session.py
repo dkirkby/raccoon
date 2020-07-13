@@ -75,7 +75,7 @@ class Session(object):
         nrows, nchunks = self.overview_data.shape
         assert nrows == self.nbus
         fig, ax = plt.subplots(figsize=(width + margin, height * nrows + margin))
-        plt.subplots_adjust(left=margin / fig.get_figwidth(), right=1, bottom=margin / fig.get_figheight(), top=1)
+        plt.subplots_adjust(left=margin / fig.get_figwidth(), right=0.99, bottom=margin / fig.get_figheight(), top=0.99)
         ax.imshow(self.overview_data, origin='upper', interpolation='none',
                   cmap='RdYlGn', vmin=-1, vmax=+1, aspect='auto',
                   extent=[0, 1e3 * self.chunks[-1], self.nbus - 0.5, -0.5])
