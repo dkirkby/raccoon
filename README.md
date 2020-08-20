@@ -20,7 +20,7 @@ python -m pip install git+https://github.com/dkirkby/raccoon.git
 Use a `Session` object to ingest, analyze and display raw CAN bus samples. Provide an optional high-level analyzer (HLA) to interpret complete data frames. A suitable HLA for [DESI](https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1710) is included.
 
 For example:
-```
+```python
 from raccoon.session import Session
 from raccoon.saleae import load_analog_binary_v1, load_analog_binary_v2
 from raccoon.desi import desibus
