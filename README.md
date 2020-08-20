@@ -22,11 +22,15 @@ Use a `Session` object to ingest, analyze and display raw CAN bus samples. Provi
 For example:
 ```
 from raccoon.session import Session
-from raccoon.saleae import load_analog_binary_v1
+from raccoon.saleae import load_analog_binary_v1, load_analog_binary_v2
 from raccoon.desi import desibus
 
-# Load binary data captured using Logic v1.2+ from a Saleae analyzer.
+# Load analog binary data captured using Logic v1.2+ from a Saleae analyzer.
 samples, period = load_analog_binary_v1('TestStand/PowerDown.bin')
+
+# Alternatively, load analog binary data captured using Logic 2.x from a Saleae analyzer.
+# In this case, provide the directory name where the individual channels are saved.
+#samples, period = load_analog_binary_v2('TestStand/PowerDown')
 
 # The binary format does not record channel names so we list them here by hand.
 names = 'CAN10L,CAN10H,CAN11L,CAN11H,CAN13L,CAN13H,CAN12L,CAN12H,CAN22L,CAN22H,CAN23L,CAN23H,CAN14L,CAN14H,CAN15L,CAN15H'
