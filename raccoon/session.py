@@ -37,6 +37,12 @@ class Session(object):
         self.CAN_H, self.CAN_L = [], []
         self.nbus = len(self.CAN_names)
 
+        # Convert comparator settings into per-channel dictionaries if necessary.
+        if not isinstance(threshold, dict):
+            threshold = {name: threshold for name in names}
+        if not isinstance(hysteresis, dict):
+            hysteresis = {name: hysteresis for name in names}
+
         # Loop over buses.
         self.chunks = np.linspace(0, nsamples * self.sampling_period, nchunks + 1) - 0.5 * self.sampling_period
         self.overview_data = np.empty((self.nbus, nchunks))
@@ -45,8 +51,9 @@ class Session(object):
             name = self.CAN_names[bus]
             self.CAN_H.append(self.analog_samples[self.names.index(name + 'H')])
             self.CAN_L.append(self.analog_samples[self.names.index(name + 'L')])
+            print(f'Digitizing {name} with threshold={threshold[name]:.3f}, hysteresis={hysteresis[name]:.3f}.')
             digital_transitions, initial_level = digitize(
-                self.CAN_H[bus] - self.CAN_L[bus], threshold, hysteresis, inverted=True)
+                self.CAN_H[bus] - self.CAN_L[bus], threshold[name], hysteresis[name], inverted=True)
             digital_transitions = digital_transitions * self.sampling_period
             self.overview_data[bus] = np.histogram(digital_transitions, bins=self.chunks)[0] > 0
             D = CANdecoder(digital_transitions, initial_level, rate=rate, name=name, HLA=HLA)
