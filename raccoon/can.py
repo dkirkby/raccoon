@@ -73,7 +73,6 @@ class CANdecoder(object):
                 self.annotations.append((t_error - 0.5, t_error + 0.5, '!'))
                 try:
                     if e.handle_error:
-                        print('Handling error')
                         self.handle_error()
                     self.advance()
                 except StopIteration:
