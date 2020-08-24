@@ -23,7 +23,7 @@ For example:
 ```python
 from raccoon.session import Session
 from raccoon.saleae import load_analog_binary_v1, load_analog_binary_v2
-from raccoon.desi import desibus
+from raccoon.desi import DESIcanbus
 
 # Load analog binary data captured using Logic v1.2+ from a Saleae analyzer.
 samples, period = load_analog_binary_v1('TestStand/PowerDown.bin')
@@ -36,7 +36,7 @@ samples, period = load_analog_binary_v1('TestStand/PowerDown.bin')
 names = 'CAN10L,CAN10H,CAN11L,CAN11H,CAN13L,CAN13H,CAN12L,CAN12H,CAN22L,CAN22H,CAN23L,CAN23H,CAN14L,CAN14H,CAN15L,CAN15H'
 
 # Initialize a forensics session using the DESI protocol for high-level packet analysis.
-PowerDown = Session(samples, period, names, HLA=desibus)
+PowerDown = Session(samples, period, names, HLA=DESIcanbus())
 
 # Display an overview plot of bus activity.
 PowerDown.overview();
