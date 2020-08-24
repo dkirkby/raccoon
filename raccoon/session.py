@@ -176,7 +176,7 @@ class Session(object):
         else:
             return (frame['t2'] + int(post)) / D.rate
 
-    def detail(self, names, tstart, tstop, format='Af', tzero='display', width=14, height=2, margin=0.5):
+    def detail(self, names, tstart, tstop, format='Af', tzero='display', ylim=None, width=14, height=2, margin=0.5):
         """Display a detail plot for selected buses over a limited time interval.
 
         The tstart and tstop values can either be specified in milliseconds or
@@ -184,7 +184,8 @@ class Session(object):
         for details on how frame relative values are encoded.
 
         The format string is a concatenation of the options to select what to display:
-        A: analog traces
+        A: show CANL and CANH analog traces separately
+        C: show CANH - CANL analog comparator input
         D: digital transitions
         S: sampled binary values, after synchronization and bit stuffing
         F: frame fields (use 'f' to omit text labels)
@@ -196,6 +197,11 @@ class Session(object):
 
         Display time units are selected automatically from s/ms/us depending on the
         displayed range of times.
+
+        The ylim parameter sets the vertical scale for analog values and has no effect unless
+        either 'A' or 'C' is included in the format string.  The value should be None, to use
+        autorange, or a tuple (ymin, ymax), or else dictionary of tuples using channel names
+        as the dictionary keys.
         """
         names = names.split(',')
         invalid = [N for N in names if N not in self.CAN_names]
@@ -226,7 +232,10 @@ class Session(object):
         tzero *= mul
         # Initialize plots.
         fig, axes = plt.subplots(nchan, 1, figsize=(width, height * nchan + margin), sharex=True, squeeze=False)
-        plt.subplots_adjust(top=0.99, hspace=0.02, left=0.01, right=0.99, bottom=margin / fig.get_figheight())
+        plot_analog = 'A' in format or 'C' in format
+        right = 0.95 if plot_analog else 0.99
+        hspace = 0.04 if plot_analog else 0.02
+        plt.subplots_adjust(top=0.99, hspace=hspace, left=0.01, right=right, bottom=margin / fig.get_figheight())
         for ax, name in zip(axes.flat, names):
             bus = self.CAN_names.index(name)
             D = self.decoder[name]
@@ -237,11 +246,19 @@ class Session(object):
             ax.set_yticks([])
             ax.text(0.01, 0.01, name, transform=ax.transAxes, ha='left', va='bottom',
                     fontsize=14, fontweight='bold', color='k')
-            if 'A' in format:
+            if plot_analog:
                 rhs = ax.twinx()
-                rhs.plot(tvec - tzero, self.CAN_H[bus][lo:hi], 'k-', alpha=0.25, lw=1)
-                rhs.plot(tvec - tzero, self.CAN_L[bus][lo:hi], 'k-', alpha=0.25, lw=1)
-                rhs.set_yticks([])
+                if 'A' in format:
+                    rhs.plot(tvec - tzero, self.CAN_H[bus][lo:hi], '-', c='k', alpha=0.35, lw=1)
+                    rhs.plot(tvec - tzero, self.CAN_L[bus][lo:hi], '-', c='darkolivegreen', alpha=0.35, lw=1)
+                if 'C' in format:
+                    rhs.plot(tvec - tzero, self.CAN_H[bus][lo:hi] - self.CAN_L[bus][lo:hi], 'k-', alpha=0.5, lw=1)
+                if isinstance(ylim, dict):
+                    chan_ylim = ylim.get(name, None)
+                else:
+                    chan_ylim = ylim
+                if chan_ylim is not None:
+                    rhs.set_ylim(*chan_ylim)
             if 'D' in format:
                 idx_lo, idx_hi = np.searchsorted(D.dt, [tstart * D.rate, tstop * D.rate])
                 segments = [[tstart], D.dt[idx_lo: idx_hi + 1] / D.rate]
